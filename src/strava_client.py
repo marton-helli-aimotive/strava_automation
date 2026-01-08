@@ -1,19 +1,33 @@
 import datetime
+import streamlit as st
 from .auth import StravaAuth
 
+
 class StravaClient:
+    """Strava API client wrapper with session-aware authentication."""
+    
     def __init__(self):
-        self.auth = StravaAuth()
-        self._client = None
+        self._auth = None
+    
+    @property
+    def auth(self):
+        """Lazy-load auth to ensure session state is available."""
+        if self._auth is None:
+            self._auth = StravaAuth()
+        return self._auth
     
     @property
     def client(self):
-        if self._client is None:
-            self._client = self.auth.get_client()
-        return self._client
+        """Get the authenticated Strava client."""
+        return self.auth.get_client()
 
     def is_authenticated(self):
-        return self.client is not None
+        return self.auth.is_authenticated()
+
+    def disconnect(self):
+        """Disconnect the user by clearing their tokens."""
+        self.auth.clear_tokens()
+        self._auth = None  # Reset auth instance
 
     def fetch_rides(self, year, month):
         if not self.client:
@@ -38,9 +52,6 @@ class StravaClient:
         if commute is not None: update_params['commute'] = commute
         if trainer is not None: update_params['trainer'] = trainer
         if hide_from_home is not None: update_params['hide_from_home'] = hide_from_home
-        
-        # Note: visibility might need a specific handling if not directly supported by update_activity in stravalib version
-        # But usually it is. If not, we might need a raw request.
         
         try:
             self.client.update_activity(activity_id, **update_params)

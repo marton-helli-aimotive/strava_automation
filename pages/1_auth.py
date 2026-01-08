@@ -2,46 +2,61 @@ import streamlit as st
 from src.auth import StravaAuth
 from src.strava_client import StravaClient
 
-st.title("🔐 Authentication")
+st.title("🔐 Connect to Strava")
 
-if 'auth' not in st.session_state:
-    st.session_state.auth = StravaAuth()
+# Get shared client instance
 if 'strava' not in st.session_state:
     st.session_state.strava = StravaClient()
 
-auth = st.session_state.auth
 strava = st.session_state.strava
+auth = strava.auth
 
-# Check if we have a code in the URL (callback)
-query_params = st.query_params
-if 'code' in query_params:
-    code = query_params['code']
-    with st.spinner("Exchanging code for token..."):
+# Handle OAuth callback (code in URL)
+if 'code' in st.query_params:
+    code = st.query_params['code']
+    with st.spinner("Connecting to Strava..."):
         try:
             auth.exchange_code(code)
-            st.query_params.clear() # Clear code from URL
-            st.success("Successfully authenticated!")
+            st.query_params.clear()
+            st.success("Successfully connected!")
             st.rerun()
         except Exception as e:
-            st.error(f"Authentication failed: {e}")
+            st.error(f"Connection failed: {e}")
 
+# Main UI
 if strava.is_authenticated():
     athlete = strava.get_athlete()
     if athlete:
-        st.success(f"You are connected as **{athlete.firstname} {athlete.lastname}**")
-        st.image(athlete.profile_medium, width=100)
+        st.success(f"✅ Connected as **{athlete.firstname} {athlete.lastname}**")
+        if athlete.profile_medium:
+            st.image(athlete.profile_medium, width=100)
     
-    if st.button("Disconnect"):
-        import os
-        if os.path.exists("data/tokens.json"):
-            os.remove("data/tokens.json")
-        st.session_state.strava = StravaClient() # Reset client
+    st.divider()
+    
+    if st.button("🔌 Disconnect from Strava", type="secondary"):
+        strava.disconnect()
         st.rerun()
+        
+    st.info("You're all set! Head to the **Analyze** page to start analyzing your commutes.")
+    
 else:
-    if not auth.client_id or not auth.client_secret:
-        st.warning("⚠️ **API Credentials Missing**: Please enter your Strava API details in the section below to enable connection.")
+    # Check if app is properly configured
+    if not auth.is_configured():
+        st.error("""
+        ⚠️ **App Not Configured**
+        
+        The app administrator needs to set up Strava API credentials.
+        
+        If you are the administrator, please set `STRAVA_CLIENT_ID` and `STRAVA_CLIENT_SECRET` 
+        in your Streamlit secrets or environment variables.
+        """)
     else:
-        st.info("Please click the button below to authorize the app on Strava.")
+        st.markdown("""
+        Click the button below to securely connect your Strava account.
+        
+        You'll be redirected to Strava to authorize this app, then sent back here automatically.
+        """)
+        
         try:
             auth_url = auth.get_auth_url()
             st.markdown(f'''
@@ -50,30 +65,30 @@ else:
                         background-color: #FC4C02;
                         color: white;
                         border: none;
-                        padding: 10px 20px;
-                        border-radius: 4px;
+                        padding: 15px 30px;
+                        border-radius: 8px;
                         cursor: pointer;
                         font-weight: bold;
-                    ">Connect with Strava</button>
+                        font-size: 16px;
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
+                    ">
+                        🔗 Connect with Strava
+                    </button>
                 </a>
             ''', unsafe_allow_html=True)
         except Exception as e:
-            st.error(f"Error generating auth URL: {e}")
-
-st.divider()
-with st.expander("⚙️ API Configuration (Advanced)", expanded=not (auth.client_id and auth.client_secret)):
-    st.markdown("""
-    To use this app, you need specialized API credentials from Strava:
-    1. Go to [Strava's API Settings](https://www.strava.com/settings/api).
-    2. Create an app (set 'Authorization Callback Domain' to `localhost` or your deployed domain).
-    3. Copy the **Client ID** and **Client Secret** below.
-    """)
-    
-    new_id = st.text_input("Strava Client ID", value=auth.client_id or "")
-    new_secret = st.text_input("Strava Client Secret", value=auth.client_secret or "", type="password")
-    new_uri = st.text_input("Redirect URI", value=auth.redirect_uri or "http://localhost:8501")
-    
-    if st.button("Save API Configuration"):
-        auth.save_config(new_id, new_secret, new_uri)
-        st.success("Configuration saved! You can now connect to Strava.")
-        st.rerun()
+            st.error(f"Error: {e}")
+        
+        st.divider()
+        
+        with st.expander("🔒 Privacy & Permissions"):
+            st.markdown("""
+            This app requests the following permissions:
+            - **Read your profile** - To display your name
+            - **Read your activities** - To analyze your rides
+            - **Write activities** - To mark commutes and update visibility
+            
+            Your data stays between you and Strava. We don't store your activities on any server.
+            """)

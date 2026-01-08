@@ -1,7 +1,5 @@
 import streamlit as st
-from src.auth import StravaAuth
 from src.strava_client import StravaClient
-import os
 
 st.set_page_config(
     page_title="Strava Commute Analyzer",
@@ -10,14 +8,15 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Initialize Session State
-if 'auth' not in st.session_state:
-    st.session_state.auth = StravaAuth()
+# Initialize shared client in session state
 if 'strava' not in st.session_state:
     st.session_state.strava = StravaClient()
 
+
 def main():
     st.title("🚲 Strava Commute Analyzer")
+    
+    strava = st.session_state.strava
     
     st.markdown("""
     Welcome to your commute assistant! This app helps you:
@@ -30,34 +29,51 @@ def main():
     # Handle OAuth Callback globally
     if 'code' in st.query_params:
         code = st.query_params['code']
-        with st.spinner("Exchanging code for token..."):
+        with st.spinner("Connecting to Strava..."):
             try:
-                st.session_state.auth.exchange_code(code)
+                strava.auth.exchange_code(code)
                 st.query_params.clear()
-                st.success("Successfully authenticated!")
+                st.success("Successfully connected!")
                 st.rerun()
             except Exception as e:
-                st.error(f"Authentication failed: {e}")
+                st.error(f"Connection failed: {e}")
 
-    if not st.session_state.strava.is_authenticated():
-        st.warning("Please connect to Strava first in the **Authentication** page.")
-        if st.button("Go to Auth Page"):
-            st.switch_page("pages/1_auth.py")
+    if not strava.is_authenticated():
+        st.warning("Please connect to Strava first to use this app.")
+        
+        if strava.auth.is_configured():
+            auth_url = strava.auth.get_auth_url()
+            st.markdown(f'''
+                <a href="{auth_url}" target="_self">
+                    <button style="
+                        background-color: #FC4C02;
+                        color: white;
+                        border: none;
+                        padding: 12px 24px;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        font-weight: bold;
+                    ">🔗 Connect with Strava</button>
+                </a>
+            ''', unsafe_allow_html=True)
+        else:
+            if st.button("Go to Auth Page"):
+                st.switch_page("pages/1_auth.py")
     else:
-        athlete = st.session_state.strava.get_athlete()
+        athlete = strava.get_athlete()
         if athlete:
             st.success(f"Connected as **{athlete.firstname} {athlete.lastname}**")
             
             st.markdown("### Quick Navigation")
             col1, col2, col3 = st.columns(3)
             with col1:
-                if st.button("🚀 Start New Analysis", width='stretch'):
+                if st.button("🚀 Start New Analysis", use_container_width=True):
                     st.switch_page("pages/2_analyze.py")
             with col2:
-                if st.button("📂 Browse Saved Logs", width='stretch'):
+                if st.button("📂 Browse Saved Logs", use_container_width=True):
                     st.switch_page("pages/3_logs.py")
             with col3:
-                if st.button("⚙️ Mass Edit Activities", width='stretch'):
+                if st.button("⚙️ Mass Edit Activities", use_container_width=True):
                     st.switch_page("pages/4_edit.py")
             
             # Show quick summary of logs
