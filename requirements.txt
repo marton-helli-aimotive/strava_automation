@@ -1,0 +1,10 @@
+streamlit
+stravalib
+scikit-learn
+pandas
+folium
+streamlit-folium
+plotly
+python-dotenv
+geopy
+polyline

@@ -1,0 +1,8 @@
+.env
+data/config.json
+data/tokens.json
+data/logs/
+__pycache__/
+*.pyc
+.streamlit/
+debug_ids.py
